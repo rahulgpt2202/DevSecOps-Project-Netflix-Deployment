@@ -1,11 +1,8 @@
-pipeline{
+pipeline {
     agent any
-    tools{
-        jdk 'jdk17'
-        nodejs 'node16'
-    }
-    environment {
-        SCANNER_HOME=tool 'sonar-scanner'
+    tools {
+        jdk 'jdk21'
+        nodejs 'node22'
     }
     stages {
         stage('clean workspace'){
@@ -18,20 +15,23 @@ pipeline{
                 git branch: 'main', url: 'https://github.com/imran1509/DevSecOps-Project-Netflix-Deployment.git'
             }
         }
-        stage("Sonarqube Analysis "){
+        stage("Sonarqube Analysis"){
             steps{
-                withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Netflix \
-                    -Dsonar.projectKey=Netflix-test '''
+                script {
+                    // टूल को यहाँ सुरक्षित तरीके से लोड किया गया है
+                    def scannerHome = tool 'sonar-scanner'
+                    withSonarQubeEnv('sonar-server') {
+                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectName=Netflix -Dsonar.projectKey=Netflix-test"
+                    }
                 }
             }
         }
         stage("quality gate"){
            steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token' 
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'  
                 }
-            } 
+            }  
         }
         stage('Install Dependencies') {
             steps {
@@ -52,17 +52,17 @@ pipeline{
         stage("Docker Build & Push"){
             steps{
                 script{
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
+                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){    
                        sh "docker build --build-arg TMDB_V3_API_KEY=<yourtmdbapikey> -t netflix ."
                        sh "docker tag netflix imran1509/netflix:latest "
                        sh "docker push imran1509/netflix:latest "
-                    }
+                   }
                 }
             }
         }
         stage("TRIVY"){
             steps{
-                sh "trivy image imran1509/netflix:latest > trivyimage.txt" 
+                sh "trivy image imran1509/netflix:latest > trivyimage.txt"  
             }
         }
         stage('Deploy to container'){
@@ -82,16 +82,15 @@ pipeline{
                 }
             }
         }
-
     }
     post {
-     always {
+       always {
         emailext attachLog: true,
             subject: "'${currentBuild.result}'",
             body: "Project: ${env.JOB_NAME}<br/>" +
                 "Build Number: ${env.BUILD_NUMBER}<br/>" +
                 "URL: ${env.BUILD_URL}<br/>",
-            to: 'iimransaifi1509@gmail.com',                                #change mail here
+            to: 'iimransaifi1509@gmail.com',  // यहाँ से # हटाकर सही कमेंट लगा दिया गया है
             attachmentsPattern: 'trivyfs.txt,trivyimage.txt'
         }
     }
